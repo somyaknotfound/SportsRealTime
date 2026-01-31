@@ -1,4 +1,5 @@
-import { WebSocket, WebSocketServer } from "ws";
+import{ WebSocket,  WebSocketServer } from "ws"
+import { wsArcjet } from "../arcjet.js";
 
 function sendJson(socket, payload) {
     if (socket.readyState !== WebSocket.OPEN) {
