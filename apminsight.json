@@ -1,0 +1,4 @@
+{  "licenseKey": "${APM_LICENSE_KEY}",
+  "appName": "SportRealTime",
+  "port": 10000
+}
