@@ -2,6 +2,7 @@ import express from 'express';
 import http from 'http';
 import { matchRouter } from './routes/matches.js'; // ADD .js
 import { attachWebSocketServer } from './ws/server.js';
+import { securityMiddleware } from './arcjet.js';
 
 const PORT = Number(process.env.PORT || 8000);
 const HOST = process.env.HOST || '0.0.0.0';
@@ -17,6 +18,8 @@ app.get('/', (req, res) => {
   res.json({ message: 'Server is running' });
 });
 
+app.use(securityMiddleware());
+// security middleware protecting the rest apis
 
 // express is a frame work built on top of nodejs http  module 
 // create the http server to put on ws
