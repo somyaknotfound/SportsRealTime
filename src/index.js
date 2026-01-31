@@ -1,5 +1,18 @@
 import AgentAPI from 'apminsight';
-AgentAPI.config()
+
+// Configure APM from environment variable and avoid reading secrets from repo
+const apmKey = process.env.APM_LICENSE_KEY;
+if (apmKey) {
+  try {
+    // Prefer explicit config via env var to avoid embedding secrets in files
+    AgentAPI.config({ licenseKey: apmKey, appName: process.env.APM_APP_NAME || 'SportRealTime', port: Number(process.env.APM_PORT || 10000) });
+    console.log('APM Agent configured.');
+  } catch (e) {
+    console.error('Failed to configure APM Agent:', e);
+  }
+} else {
+  console.warn('APM_LICENSE_KEY not set; APM agent disabled.');
+}
 
 import express from 'express';
 import http from 'http';
