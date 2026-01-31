@@ -44,6 +44,7 @@ matchRouter.post('/', async (req, res) => {
             details: parsed.error.issues
         });
     }
+    // destructure after check
 
     const { startTime, endTime, homeScore, awayScore } = parsed.data;
 
