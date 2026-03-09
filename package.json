@@ -7,7 +7,8 @@
     "start": "node src/index.js",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:demo": "node src/db-demo.js"
+    "db:demo": "node src/db-demo.js",
+    "seed" : "node src/seed/seed.js"
   },
   "keywords": [],
   "author": "",
@@ -17,12 +18,11 @@
   "dependencies": {
     "@arcjet/inspect": "^1.0.0",
     "@arcjet/node": "^1.0.0",
-    "@neondatabase/serverless": "^1.0.2",
     "apminsight": "^5.2.1",
     "dotenv": "^17.2.3",
     "drizzle-orm": "^0.45.1",
     "express": "^5.2.1",
-    "pg": "^8.18.0",
+    "mysql2": "^3.11.3",
     "ws": "^8.19.0",
     "zod": "^4.3.6"
   },

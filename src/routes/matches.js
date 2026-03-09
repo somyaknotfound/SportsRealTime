@@ -4,7 +4,7 @@ import { matches } from "../db/schema.js"; // ADD .js
 import { getMatchStatus } from "../utils/match-status.js"; // ADD .js
 import { db } from "../db/db.js"; // ADD .js
 import { string } from "zod";
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 
 export const matchRouter = Router();
 const MAX_LIMIT = 50;
@@ -48,14 +48,25 @@ matchRouter.post('/', async (req, res) => {
     const { startTime, endTime, homeScore, awayScore } = parsed.data;
 
     try {
-        const [event] = await db.insert(matches).values({
+        // MySQL does not support RETURNING; perform insert then fetch by insertId
+        const insertResult = await db.insert(matches).values({
             ...parsed.data,
             startTime: new Date(startTime),
             endTime: new Date(endTime),
             homeScore: homeScore ?? 0,
             awayScore: awayScore ?? 0,
             status: getMatchStatus(startTime, endTime),
-        }).returning();
+        });
+
+        const insertId = Array.isArray(insertResult) && insertResult[0]?.insertId
+            ? insertResult[0].insertId
+            : insertResult.insertId; // driver-specific shape fallback
+
+        const [event] = await db
+            .select()
+            .from(matches)
+            .where(eq(matches.id, insertId));
+
         // push the new event
         if (res.app.locals.broadcastMatchCreated) {
             res.app.locals.broadcastMatchCreated(event);

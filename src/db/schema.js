@@ -1,34 +1,34 @@
-import { pgEnum, pgTable, serial, text, integer, timestamp, jsonb } from 'drizzle-orm/pg-core';
-
-// Enum for match status (scheduled, live, finished)
-export const matchStatus = pgEnum('match_status', ['scheduled', 'live', 'finished']);
+import { mysqlEnum, mysqlTable, int, varchar, datetime, json } from 'drizzle-orm/mysql-core';
+import { sql } from 'drizzle-orm';
 
 // Matches table
-export const matches = pgTable('matches', {
-  id: serial('id').primaryKey(),
-  sport: text('sport').notNull(),
-  homeTeam: text('home_team').notNull(),
-  awayTeam: text('away_team').notNull(),
-  status: matchStatus('status').notNull().default('scheduled'),
-  startTime: timestamp('start_time'),
-  endTime: timestamp('end_time'),
-  homeScore: integer('home_score').notNull().default(0),
-  awayScore: integer('away_score').notNull().default(0),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
+export const matches = mysqlTable('matches', {
+  id: int('id').autoincrement().primaryKey(), // SERIAL -> INT AUTO_INCREMENT
+  sport: varchar('sport', { length: 255 }).notNull(), // text -> varchar
+  homeTeam: varchar('home_team', { length: 255 }).notNull(), // text -> varchar
+  awayTeam: varchar('away_team', { length: 255 }).notNull(), // text -> varchar
+  status: mysqlEnum('match_status', ['scheduled', 'live', 'finished'])
+    .notNull()
+    .default('scheduled'),
+  startTime: datetime('start_time'),
+  endTime: datetime('end_time'),
+  homeScore: int('home_score').notNull().default(0),
+  awayScore: int('away_score').notNull().default(0),
+  createdAt: datetime('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
 // Commentary table
-export const commentary = pgTable('commentary', {
-  id: serial('id').primaryKey(),
-  matchId: integer('match_id').notNull().references(() => matches.id),
-  minute: integer('minute'),
-  sequence: integer('sequence'),
-  period: text('period'),
-  eventType: text('event_type'),
-  actor: text('actor'),
-  team: text('team'),
-  message: text('message').notNull(),
-  metadata: jsonb('metadata'),
-  tags: jsonb('tags'),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
+export const commentary = mysqlTable('commentary', {
+  id: int('id').autoincrement().primaryKey(),
+  matchId: int('match_id').notNull().references(() => matches.id),
+  minute: int('minute'),
+  sequence: int('sequence'),
+  period: varchar('period', { length: 255 }),
+  eventType: varchar('event_type', { length: 255 }),
+  actor: varchar('actor', { length: 255 }),
+  team: varchar('team', { length: 255 }),
+  message: varchar('message', { length: 1024 }).notNull(),
+  metadata: json('metadata'), // JSONB -> JSON
+  tags: json('tags'),
+  createdAt: datetime('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
 });

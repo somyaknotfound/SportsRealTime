@@ -56,12 +56,22 @@ commentaryRouter.post('/', async (req, res) => {
 
     try {
         const { minute, ...rest } = bodyResult.data;
-        const [result] = await db.insert(commentary).values({
+
+        // Insert first (no RETURNING in MySQL), then fetch by insertId
+        const insertResult = await db.insert(commentary).values({
             matchId: paramsResult.data.id,
             minute,
             ...rest
-        }).returning();
-        
+        });
+
+        const insertId = Array.isArray(insertResult) && insertResult[0]?.insertId
+            ? insertResult[0].insertId
+            : insertResult.insertId;
+
+        const [result] = await db
+            .select()
+            .from(commentary)
+            .where(eq(commentary.id, insertId));
 
         if(res.app.locals.broadcastCommentary) {
             res.app.locals.broadcastCommentary(result.matchId, result);

@@ -1,3 +1,4 @@
+import 'dotenv/config'; // Ensure env vars (including MySQL) are loaded at startup
 import AgentAPI from 'apminsight';
 
 // Configure APM from environment variable and avoid reading secrets from repo
@@ -35,7 +36,7 @@ app.get('/', (req, res) => {
 });
 
 // Security middleware protecting the REST APIs
-app.use(securityMiddleware());
+// app.use(securityMiddleware());
 
 // Initialize WebSocket FIRST (before using broadcast functions)
 const { broadcastMatchCreated, broadcastCommentary } = attachWebSocketServer(server);

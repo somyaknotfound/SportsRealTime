@@ -1,19 +1,30 @@
-import dotenv from 'dotenv';
+import 'dotenv/config';
 import { defineConfig } from 'drizzle-kit';
 
-dotenv.config();
 
-console.log('USING DB URL:', process.env.DATABASE_URL_DIRECT ? 'Found ✓' : 'Not found ✗');
-
-if (!process.env.DATABASE_URL_DIRECT) {
-  throw new Error('DATABASE_URL_DIRECT is not set in .env file');
+const required = ['DB_HOST', 'DB_PORT', 'DB_USER', 'DB_PASSWORD', 'DB_NAME'];
+const missing = required.filter((k) => !process.env[k]);
+if (missing.length > 0) {
+  throw new Error(
+    `Missing required environment variables for Drizzle: ${missing.join(', ')}`
+  );
 }
+
+const host = process.env.DB_HOST;
+const port = Number(process.env.DB_PORT);
+const user = process.env.DB_USER;
+const password = process.env.DB_PASSWORD;
+const database = process.env.DB_NAME;
 
 export default defineConfig({
   schema: './src/db/schema.js',
   out: './drizzle',
-  dialect: 'postgresql',
+  dialect: 'mysql',
   dbCredentials: {
-    url: process.env.DATABASE_URL_DIRECT,
+    host: host,
+    port: port,
+    user: user,
+    password: password,
+    database: database,
   },
 });

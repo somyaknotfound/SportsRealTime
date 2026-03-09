@@ -1,6 +1,6 @@
 # SportRealTime — Real-time Sports Commentary App ⚽🏀🏈
 
-A lightweight Node.js + Express app that demonstrates live sports match management and real-time commentary using WebSockets, Drizzle ORM (Postgres / Neon), Zod validation, and simple observability integration.
+A lightweight Node.js + Express app that demonstrates live sports match management and real-time commentary using WebSockets, Drizzle ORM (MySQL), Zod validation, and simple observability integration.
 
 ---
 
@@ -8,7 +8,7 @@ A lightweight Node.js + Express app that demonstrates live sports match manageme
 
 - **Express REST API** for matches and commentary (JSON middleware)
 - **WebSocket server** (via `ws`) for real-time broadcasts (/ws)
-- **Drizzle ORM** with `node-postgres` (`pg`) adapter for type-safe DB access
+- **Drizzle ORM** with `mysql2` adapter for type-safe DB access
 - **Migrations** using `drizzle-kit`
 - **Zod** validation schemas for requests
 - **APM (apminsight)** integration via environment variable (`APM_LICENSE_KEY`) (optional)
@@ -25,22 +25,26 @@ A lightweight Node.js + Express app that demonstrates live sports match manageme
     - `matches.js` — endpoints for creating/listing matches
     - `commentary.js` — nested routes: `/matches/:id/commentary`
   - `db/`
-    - `db.js` — Drizzle + `pg` Pool client
+    - `db.js` — Drizzle + `mysql2/promise` connection pool
     - `schema.js` — DB schema (`matches`, `commentary`, `match_status` enum)
   - `validation/`
     - `matches.js` — Zod schemas for match endpoints
     - `commentary.js` — Zod schemas for commentary
+  - `seed/`
+    - `seed.js` — API-based seeder that populates matches & commentary
+  - `data/`
+    - `data.json` — Seed data for matches and commentary entries
   - `ws/` — WebSocket handlers and broadcasting functions
   - `arcjet.js` — Arcjet protection middleware
 - `drizzle.config.js` — Drizzle Kit config for migrations
+- `test-client.html` — Browser-based WebSocket test client
 - `.env` — environment variables (ignored by git)
-- `apminsight.json` — removed secrets; uses `${APM_LICENSE_KEY}`
 
 ---
 
 ## 🚀 Quickstart
 
-Prerequisites: Node.js (LTS), npm, a Postgres DB (Neon recommended)
+Prerequisites: Node.js (LTS), npm, a MySQL database
 
 1. Install dependencies
 
@@ -51,15 +55,26 @@ npm install
 2. Add environment variables (create `.env` at project root)
 
 ```env
-# DB connection strings
-DATABASE_URL="postgresql://.../dbname?..."            # pooler (app)
-DATABASE_URL_DIRECT="postgresql://.../dbname?..."     # direct (migrations)
+# MySQL connection
+DB_HOST=localhost
+DB_PORT=3306
+DB_USER=root
+DB_PASSWORD=yourpassword
+DB_NAME=sportrealtime
+
+# Server
+PORT=8000
+HOST=0.0.0.0
 
 # Optional APM
 APM_LICENSE_KEY="your_apm_license_key"
+
+# Arcjet
+ARCJET_KEY="your_arcjet_key"
+ARCJET_ENV="development"
 ```
 
-> Note: Do not commit `.env` or `apminsight.json` with secrets.
+> Note: Do not commit `.env` with secrets.
 
 3. Generate / apply migrations
 
@@ -75,10 +90,10 @@ npm run dev   # development with watcher
 npm start     # production-mode
 ```
 
-5. Run DB demo (quick CRUD flow)
+5. Seed the database (requires running server)
 
 ```bash
-npm run db:demo
+npm run seed
 ```
 
 ---
@@ -99,7 +114,7 @@ WebSocket endpoint: `ws://<host>/ws`
 
 ## 🔒 Security & Secrets
 
-- **APM key rotation**: If a secret is accidentally committed, rotate it immediately, remove it from repo, and scrub git history (use `git filter-repo` or BFG). See `SECURITY.md` recommendations.
+- **APM key rotation**: If a secret is accidentally committed, rotate it immediately, remove it from repo, and scrub git history (use `git filter-repo` or BFG).
 - `.gitignore` includes `.env` and `apminsight.json` to avoid committing secrets.
 - Arcjet middleware is used for rate-limiting / bot protection (enabled only if `ARCJET_KEY` set).
 
@@ -107,8 +122,7 @@ WebSocket endpoint: `ws://<host>/ws`
 
 ## 🛠️ Troubleshooting & Notes
 
-- Migrations failing with `ETIMEDOUT` usually indicate a **network/connectivity** issue to the DB endpoint. Verify `DATABASE_URL_DIRECT`, your network, and that Neon allows your IP.
-- If `drizzle-kit` isn’t found during `npm run db:migrate`, ensure `drizzle-kit` is installed as a dev dependency.
+- If `drizzle-kit` isn't found during `npm run db:migrate`, ensure `drizzle-kit` is installed as a dev dependency.
 - If imports fail (module not found), run `npm install` to update `node_modules` and commit `package.json`/`package-lock.json`.
 
 ---
@@ -125,11 +139,3 @@ WebSocket endpoint: `ws://<host>/ws`
 ## 📬 Contributing
 
 PRs welcome. For security-sensitive changes (rotating keys, scrubbing secrets), coordinate changes with the team and do not push secrets to the repo.
-
----
-
-If you want, I can also:
-- add `SECURITY.md` with steps to rotate and scrub keys ✅
-- add basic tests for your routes and validation ✅
-
-Happy to continue — tell me which follow-up you'd like next! 💡

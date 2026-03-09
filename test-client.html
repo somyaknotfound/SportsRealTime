@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SportRealTime WebSocket Test Client</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 20px;
+    }
+    .panel {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+      display: flex;
+      flex-direction: column;
+    }
+    h2 {
+      color: #333;
+      margin-bottom: 16px;
+      border-bottom: 2px solid #667eea;
+      padding-bottom: 10px;
+    }
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      font-weight: 600;
+    }
+    .status.connected {
+      background: #d4edda;
+      color: #155724;
+    }
+    .status.disconnected {
+      background: #f8d7da;
+      color: #721c24;
+    }
+    .status-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .connected .status-dot { background: #28a745; }
+    .disconnected .status-dot { background: #dc3545; }
+    
+    .form-group {
+      margin-bottom: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    label {
+      font-weight: 600;
+      color: #555;
+      font-size: 14px;
+    }
+    input, select {
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    input:focus, select:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+    button {
+      padding: 12px 16px;
+      background: #667eea;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    button:hover {
+      background: #5568d3;
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    }
+    button:active {
+      transform: translateY(0);
+    }
+    .button-group {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    
+    .log {
+      flex: 1;
+      overflow-y: auto;
+      background: #f8f9fa;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 12px;
+      font-size: 13px;
+      font-family: 'Courier New', monospace;
+      max-height: 400px;
+    }
+    .log-entry {
+      padding: 8px;
+      margin-bottom: 8px;
+      border-left: 3px solid #667eea;
+      background: white;
+      border-radius: 4px;
+    }
+    .log-entry.info { border-left-color: #17a2b8; background: #d1ecf1; }
+    .log-entry.success { border-left-color: #28a745; background: #d4edda; }
+    .log-entry.error { border-left-color: #dc3545; background: #f8d7da; }
+    .log-entry.warning { border-left-color: #ffc107; background: #fff3cd; }
+    .timestamp {
+      color: #999;
+      font-size: 11px;
+      display: block;
+      margin-bottom: 4px;
+    }
+    
+    .match-list {
+      flex: 1;
+      overflow-y: auto;
+      max-height: 400px;
+    }
+    .match-item {
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      margin-bottom: 8px;
+      background: #f8f9fa;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .match-item:hover {
+      background: #e7f3ff;
+      border-color: #667eea;
+      transform: translateX(4px);
+    }
+    .match-item.active {
+      background: #d4e5ff;
+      border-color: #667eea;
+      font-weight: 600;
+    }
+    .match-id {
+      color: #667eea;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    .match-teams {
+      color: #555;
+      font-size: 13px;
+      margin-top: 4px;
+    }
+    .match-status {
+      font-size: 12px;
+      color: #999;
+      margin-top: 4px;
+    }
+    
+    .commentary-list {
+      flex: 1;
+      overflow-y: auto;
+      max-height: 400px;
+    }
+    .comment-item {
+      padding: 12px;
+      border-left: 3px solid #764ba2;
+      background: #f8f9fa;
+      margin-bottom: 8px;
+      border-radius: 4px;
+    }
+    .comment-time {
+      font-size: 12px;
+      color: #999;
+    }
+    .comment-event {
+      color: #764ba2;
+      font-weight: 600;
+      margin: 4px 0;
+    }
+    .comment-message {
+      color: #555;
+      font-size: 14px;
+    }
+    
+    @media (max-width: 1200px) {
+      .container {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Panel 1: REST API Control -->
+    <div class="panel">
+      <h2>📡 REST API Control</h2>
+      <div id="wsStatus" class="status disconnected">
+        <span class="status-dot"></span>
+        <span>WebSocket: <strong>Disconnected</strong></span>
+      </div>
+
+      <div class="form-group">
+        <label>Sport</label>
+        <input type="text" id="sport" value="Cricket" placeholder="e.g., Cricket, Football">
+      </div>
+      <div class="form-group">
+        <label>Home Team</label>
+        <input type="text" id="homeTeam" value="India" placeholder="Team name">
+      </div>
+      <div class="form-group">
+        <label>Away Team</label>
+        <input type="text" id="awayTeam" value="Pakistan" placeholder="Team name">
+      </div>
+      <div class="form-group">
+        <label>Start Time</label>
+        <input type="datetime-local" id="startTime" value="2026-02-12T15:00">
+      </div>
+      <div class="form-group">
+        <label>End Time</label>
+        <input type="datetime-local" id="endTime" value="2026-02-12T20:00">
+      </div>
+      <div class="button-group">
+        <button onclick="createMatch()">✔️ Create Match</button>
+        <button onclick="clearLog()">🗑️ Clear Log</button>
+      </div>
+
+      <h3 style="margin-top: 24px; margin-bottom: 12px; color: #555;">Connection Log</h3>
+      <div class="log" id="log"></div>
+    </div>
+
+    <!-- Panel 2: Active Matches -->
+    <div class="panel">
+      <h2>⚽ Active Matches</h2>
+      <div class="form-group">
+        <label>Subscribe to Match ID</label>
+        <input type="number" id="subscribeMatchId" placeholder="Enter match ID">
+        <button onclick="subscribeToMatch()">Subscribe</button>
+      </div>
+      <div class="form-group">
+        <label>Unsubscribe from Match ID</label>
+        <input type="number" id="unsubscribeMatchId" placeholder="Enter match ID">
+        <button onclick="unsubscribeFromMatch()">Unsubscribe</button>
+      </div>
+
+      <h3 style="margin-top: 16px; margin-bottom: 12px; color: #555;">Matches Created:</h3>
+      <div class="match-list" id="matchList"></div>
+    </div>
+
+    <!-- Panel 3: Real-Time Commentary -->
+    <div class="panel">
+      <h2>💬 Real-Time Commentary</h2>
+      <div class="form-group">
+        <label>Match ID</label>
+        <input type="number" id="commentMatchId" placeholder="Enter match ID">
+      </div>
+      <div class="form-group">
+        <label>Event Type</label>
+        <select id="eventType">
+          <option value="wicket">Wicket</option>
+          <option value="boundary">Boundary</option>
+          <option value="goal">Goal</option>
+          <option value="foul">Foul</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Message</label>
+        <input type="text" id="commentMessage" placeholder="Enter commentary message">
+      </div>
+      <button onclick="addCommentary()" style="width: 100%;">Add Commentary</button>
+
+      <h3 style="margin-top: 16px; margin-bottom: 12px; color: #555;">Incoming Updates:</h3>
+      <div class="commentary-list" id="commentaryList"></div>
+    </div>
+  </div>
+
+  <script>
+    const API_URL = 'http://localhost:8000';
+    const WS_URL = 'ws://localhost:8000/ws';
+    
+    let ws = null;
+    let matches = new Map();
+    let subscriptions = new Set();
+
+    function log(message, type = 'info') {
+      const logEl = document.getElementById('log');
+      const entry = document.createElement('div');
+      entry.className = `log-entry ${type}`;
+      entry.innerHTML = `
+        <span class="timestamp">${new Date().toLocaleTimeString()}</span>
+        <span>${message}</span>
+      `;
+      logEl.insertBefore(entry, logEl.firstChild);
+      if (logEl.children.length > 50) logEl.removeChild(logEl.lastChild);
+    }
+
+    function clearLog() {
+      document.getElementById('log').innerHTML = '';
+    }
+
+    function updateWSStatus(connected) {
+      const status = document.getElementById('wsStatus');
+      if (connected) {
+        status.className = 'status connected';
+        status.innerHTML = '<span class="status-dot"></span> <span>WebSocket: <strong>Connected</strong></span>';
+      } else {
+        status.className = 'status disconnected';
+        status.innerHTML = '<span class="status-dot"></span> <span>WebSocket: <strong>Disconnected</strong></span>';
+      }
+    }
+
+    function connectWebSocket() {
+      ws = new WebSocket(WS_URL);
+      
+      ws.onopen = () => {
+        log('✅ WebSocket connected', 'success');
+        updateWSStatus(true);
+      };
+
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        log(`📨 ${JSON.stringify(data).substring(0, 80)}...`, 'info');
+        
+        if (data.type === 'match_created') {
+          const match = data.data;
+          matches.set(match.id, match);
+          updateMatchList();
+          log(`🎯 New match created: ${match.homeTeam} vs ${match.awayTeam}`, 'success');
+        } else if (data.type === 'commentary') {
+          addCommentaryUI(data.data);
+          log(`💬 New commentary on match ${data.data.matchId}`, 'success');
+        } else if (data.type === 'welcome') {
+          log('👋 Server sent welcome message', 'info');
+        } else if (data.type === 'subscribed') {
+          subscriptions.add(data.matchId);
+          log(`✔️ Subscribed to match ${data.matchId}`, 'success');
+        } else if (data.type === 'unsubscribed') {
+          subscriptions.delete(data.matchId);
+          log(`✔️ Unsubscribed from match ${data.matchId}`, 'warning');
+        }
+      };
+
+      ws.onerror = (error) => {
+        log(`❌ WebSocket error: ${error}`, 'error');
+        updateWSStatus(false);
+      };
+
+      ws.onclose = () => {
+        log('❌ WebSocket disconnected. Reconnecting in 3s...', 'error');
+        updateWSStatus(false);
+        setTimeout(connectWebSocket, 3000);
+      };
+    }
+
+    function updateMatchList() {
+      const list = document.getElementById('matchList');
+      list.innerHTML = '';
+      for (const [id, match] of matches) {
+        const div = document.createElement('div');
+        div.className = 'match-item' + (subscriptions.has(id) ? ' active' : '');
+        div.innerHTML = `
+          <div class="match-id">Match #${id}</div>
+          <div class="match-teams">${match.homeTeam} vs ${match.awayTeam}</div>
+          <div class="match-status">${match.sport} • ${match.status || 'scheduled'}</div>
+        `;
+        div.onclick = () => {
+          document.getElementById('commentMatchId').value = id;
+          document.querySelector('.match-item.active')?.classList.remove('active');
+          div.classList.add('active');
+        };
+        list.appendChild(div);
+      }
+    }
+
+    function addCommentaryUI(commentary) {
+      const list = document.getElementById('commentaryList');
+      const div = document.createElement('div');
+      div.className = 'comment-item';
+      const time = new Date(commentary.createdAt).toLocaleTimeString();
+      div.innerHTML = `
+        <div class="comment-time">${time}</div>
+        <div class="comment-event">${commentary.eventType}</div>
+        <div class="comment-message">${commentary.message}</div>
+      `;
+      list.insertBefore(div, list.firstChild);
+      if (list.children.length > 30) list.removeChild(list.lastChild);
+    }
+
+    async function createMatch() {
+      const sport = document.getElementById('sport').value;
+      const homeTeam = document.getElementById('homeTeam').value;
+      const awayTeam = document.getElementById('awayTeam').value;
+      const startTime = document.getElementById('startTime').value;
+      const endTime = document.getElementById('endTime').value;
+
+      try {
+        const response = await fetch(`${API_URL}/matches`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sport, homeTeam, awayTeam,
+            startTime: new Date(startTime).toISOString(),
+            endTime: new Date(endTime).toISOString()
+          })
+        });
+        
+        if (response.ok) {
+          log('✅ Match created successfully', 'success');
+        } else {
+          log(`❌ Error: ${response.statusText}`, 'error');
+        }
+      } catch (e) {
+        log(`❌ Network error: ${e.message}`, 'error');
+      }
+    }
+
+    async function addCommentary() {
+      const matchId = parseInt(document.getElementById('commentMatchId').value);
+      const eventType = document.getElementById('eventType').value;
+      const message = document.getElementById('commentMessage').value;
+
+      if (!matchId || !message) {
+        log('⚠️ Please fill all fields', 'warning');
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_URL}/matches/${matchId}/commentary`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ eventType, message })
+        });
+        
+        if (response.ok) {
+          log('✅ Commentary added', 'success');
+          document.getElementById('commentMessage').value = '';
+        } else {
+          log(`❌ Error: ${response.statusText}`, 'error');
+        }
+      } catch (e) {
+        log(`❌ Network error: ${e.message}`, 'error');
+      }
+    }
+
+    function subscribeToMatch() {
+      const matchId = parseInt(document.getElementById('subscribeMatchId').value);
+      if (!matchId) return;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'subscribe', matchId }));
+      } else {
+        log('⚠️ WebSocket not connected', 'warning');
+      }
+    }
+
+    function unsubscribeFromMatch() {
+      const matchId = parseInt(document.getElementById('unsubscribeMatchId').value);
+      if (!matchId) return;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'unsubscribe', matchId }));
+      } else {
+        log('⚠️ WebSocket not connected', 'warning');
+      }
+    }
+
+    // Initialize
+    window.onload = () => {
+      log('🚀 Test client loaded');
+      connectWebSocket();
+    };
+  </script>
+</body>
+</html>
