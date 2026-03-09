@@ -8,6 +8,13 @@
       "when": 1769820525704,
       "tag": "0000_lowly_earthquake",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1773033810759,
+      "tag": "0001_woozy_marvel_zombies",
+      "breakpoints": true
     }
   ]
 }
