@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
+    "test": "vitest run",
     "dev": "node --watch src/index.js",
     "start": "node src/index.js",
     "db:generate": "drizzle-kit generate",
@@ -29,6 +30,7 @@
   },
   "devDependencies": {
     "drizzle-kit": "^0.31.8",
+    "supertest": "^7.2.2",
     "vitest": "^4.0.18"
   }
 }
