@@ -3,7 +3,6 @@ import { createMatchSchema, listMatchesQuerySchema } from "../validation/matches
 import { matches } from "../db/schema.js"; // ADD .js
 import { getMatchStatus } from "../utils/match-status.js"; // ADD .js
 import { db } from "../db/db.js"; // ADD .js
-import { string } from "zod";
 import { desc } from "drizzle-orm";
 
 export const matchRouter = Router();
