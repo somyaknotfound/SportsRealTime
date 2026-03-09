@@ -158,5 +158,5 @@ export function attachWebSocketServer(server) {
         broadcastToMatch(matchId, { type: 'commentary', data: comment });
     }
 
-    return { broadcastMatchCreated, broadcastCommentary };
+    return { broadcastMatchCreated, broadcastCommentary, close: () => wss.close() };
 }
