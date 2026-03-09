@@ -1,4 +1,4 @@
-import { mysqlEnum, mysqlTable, int, varchar, datetime, json } from 'drizzle-orm/mysql-core';
+import { mysqlEnum, mysqlTable, int, varchar, datetime, json, index } from 'drizzle-orm/mysql-core';
 import { sql } from 'drizzle-orm';
 
 // Matches table
@@ -31,4 +31,6 @@ export const commentary = mysqlTable('commentary', {
   metadata: json('metadata'), // JSONB -> JSON
   tags: json('tags'),
   createdAt: datetime('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
-});
+}, (table) => [
+  index('commentary_match_id_created_at_idx').on(table.matchId, table.createdAt)
+]);

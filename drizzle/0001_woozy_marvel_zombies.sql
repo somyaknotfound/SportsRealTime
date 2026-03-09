@@ -1,0 +1,1 @@
+CREATE INDEX "commentary_match_id_created_at_idx" ON "commentary" USING btree ("match_id","created_at");

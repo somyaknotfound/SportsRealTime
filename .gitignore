@@ -72,6 +72,7 @@ web_modules/
 
 # APM Insight config (contains secrets)
 apminsight.json
+apminsightnode.json
 # APM runtime data
 apminsightdata/
 

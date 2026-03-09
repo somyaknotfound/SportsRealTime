@@ -1,9 +1,8 @@
 import { Router } from "express";
-import { createMatchSchema, listMatchesQuerySchema } from "../validation/matches.js"; // ADD .js
-import { matches } from "../db/schema.js"; // ADD .js
-import { getMatchStatus } from "../utils/match-status.js"; // ADD .js
-import { db } from "../db/db.js"; // ADD .js
-import { string } from "zod";
+import { createMatchSchema, listMatchesQuerySchema } from "../validation/matches.js";
+import { matches } from "../db/schema.js";
+import { getMatchStatus } from "../utils/match-status.js";
+import { db } from "../db/db.js";
 import { desc, eq } from "drizzle-orm";
 
 export const matchRouter = Router();
@@ -12,35 +11,35 @@ matchRouter.get('/', async (req, res) => {
     const parsed = listMatchesQuerySchema.safeParse(req.query);
 
     if (!parsed.success) {
-        return res.status(400).json({error: 'Invalid query' , details: JSON.stringify(parsed.error)});
+        return res.status(400).json({ error: 'Invalid query', details: JSON.stringify(parsed.error) });
 
     }
     // how many matches in a single call
 
-    const limit = Math.min(parsed.data.limit ?? 50 , MAX_LIMIT)
+    const limit = Math.min(parsed.data.limit ?? 50, MAX_LIMIT)
 
 
     try {
         // since db in another continent
-        const data = await db 
-                        .select()
-                        .from(matches)
-                        .orderBy((desc(matches.createdAt)))
-                        .limit(limit)
+        const data = await db
+            .select()
+            .from(matches)
+            .orderBy((desc(matches.createdAt)))
+            .limit(limit)
 
-            res.json({data});
+        res.json({ data });
 
     } catch (e) {
-        res.status(500).json({error : 'Failed to list matches.'});
+        res.status(500).json({ error: 'Failed to list matches.' });
     }
 });
 
 matchRouter.post('/', async (req, res) => {
     const parsed = createMatchSchema.safeParse(req.body);
-    
+
     if (!parsed.success) {
-        return res.status(400).json({ 
-            error: 'invalid payload', 
+        return res.status(400).json({
+            error: 'invalid payload',
             details: parsed.error.issues
         });
     }
@@ -75,9 +74,9 @@ matchRouter.post('/', async (req, res) => {
         res.status(201).json({ data: event });
     } catch (e) {
         console.error('Error creating match:', e);
-        res.status(500).json({ 
-            error: 'Failed to create Match', 
-            details: e.message 
+        res.status(500).json({
+            error: 'Failed to create Match',
+            details: e.message
         });
     }
 });
