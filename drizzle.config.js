@@ -1,7 +1,6 @@
 import 'dotenv/config';
 import { defineConfig } from 'drizzle-kit';
 
-
 const required = ['DB_HOST', 'DB_PORT', 'DB_USER', 'DB_PASSWORD', 'DB_NAME'];
 const missing = required.filter((k) => !process.env[k]);
 if (missing.length > 0) {

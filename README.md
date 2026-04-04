@@ -4,6 +4,14 @@ A lightweight Node.js + Express app that demonstrates live sports match manageme
 
 ---
 
+## Current Status
+
+- The app code is back to the earlier state, with the MySQL/Docker setup changes removed.
+- The main blocker is database connectivity: Drizzle migrations still need a reachable MySQL server that accepts the credentials in `.env`.
+- The repo is otherwise ready to run once the database is available, and the next practical step is to get MySQL online and rerun `npm run db:migrate`.
+
+---
+
 ## ✨ Key Features
 
 - **Express REST API** for matches and commentary (JSON middleware)
@@ -123,6 +131,7 @@ WebSocket endpoint: `ws://<host>/ws`
 ## 🛠️ Troubleshooting & Notes
 
 - If `drizzle-kit` isn't found during `npm run db:migrate`, ensure `drizzle-kit` is installed as a dev dependency.
+- If migrations fail with `Access denied`, the local MySQL server is rejecting the credentials in `.env`; fix the DB user/password or point the app at a database that already exists.
 - If imports fail (module not found), run `npm install` to update `node_modules` and commit `package.json`/`package-lock.json`.
 
 ---
