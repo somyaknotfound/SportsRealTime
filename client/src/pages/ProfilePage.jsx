@@ -1,0 +1,74 @@
+import { useAuth } from '../contexts/AuthContext';
+
+export default function ProfilePage({ setPage }) {
+  const { user, logout } = useAuth();
+
+  if (!user) {
+    return (
+      <div className="page">
+        <div className="empty-state" style={{ marginTop: 60 }}>
+          <span className="icon">👤</span>
+          <h3>Not signed in</h3>
+          <button className="btn btn-primary" onClick={() => setPage('auth')} style={{ marginTop: 8 }}>Sign In</button>
+        </div>
+      </div>
+    );
+  }
+
+  const createdAt = user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '—';
+
+  const roleDescriptions = {
+    viewer:      'Can view matches and commentary. Subscribe to get real-time notifications.',
+    commentator: 'Can post commentary and log structured match events on any match.',
+    admin:       'Full access: create matches, post commentary, and manage all events.',
+  };
+
+  return (
+    <div className="page" style={{ maxWidth: 560 }}>
+      <h1 style={{ marginBottom: 24 }}>My Profile</h1>
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
+          <div style={{
+            width: 64, height: 64, borderRadius: '50%',
+            background: 'linear-gradient(135deg, var(--c-accent), #0070f3)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: '1.6rem', fontWeight: 800, color: '#000'
+          }}>
+            {user.username[0].toUpperCase()}
+          </div>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: '1.2rem' }}>{user.username}</div>
+            <div style={{ color: 'var(--c-text2)', fontSize: '0.9rem' }}>{user.email}</div>
+            <div style={{ marginTop: 6 }}>
+              <span className={`role-badge ${user.role}`}>{user.role}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="divider" />
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <Row label="User ID" value={`#${user.id}`} />
+          <Row label="Role" value={user.role} />
+          <Row label="Permissions" value={roleDescriptions[user.role] ?? '—'} />
+          <Row label="Member Since" value={createdAt} />
+          <Row label="Status" value={user.isActive ? '✅ Active' : '❌ Deactivated'} />
+        </div>
+      </div>
+
+      <button className="btn btn-danger" onClick={logout} style={{ width: '100%', justifyContent: 'center' }}>
+        Sign Out
+      </button>
+    </div>
+  );
+}
+
+function Row({ label, value }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
+      <span style={{ fontSize: '0.85rem', color: 'var(--c-text3)', fontWeight: 600 }}>{label}</span>
+      <span style={{ fontSize: '0.875rem', textAlign: 'right', color: 'var(--c-text2)', flex: 1 }}>{value}</span>
+    </div>
+  );
+}

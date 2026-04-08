@@ -19,14 +19,16 @@
     "@arcjet/inspect": "^1.0.0",
     "@arcjet/node": "^1.0.0",
     "apminsight": "^5.2.1",
+    "bcryptjs": "^3.0.3",
     "dotenv": "^17.2.3",
-    "drizzle-orm": "^0.45.1",
+    "drizzle-orm": "^0.45.2",
     "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
     "mysql2": "^3.11.3",
     "ws": "^8.19.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "drizzle-kit": "^0.31.8"
+    "drizzle-kit": "^0.31.10"
   }
 }
