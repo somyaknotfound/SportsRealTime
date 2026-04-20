@@ -16,7 +16,100 @@ if (!API_URL) {
   throw new Error("API_URL is required to seed via REST endpoints.");
 }
 
+const SEED_ADMIN_EMAIL    = process.env.SEED_ADMIN_EMAIL    || 'admin@seed.local';
+const SEED_ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD || 'SeedAdmin123!';
+
 const DEFAULT_DATA_FILE = new URL("../data/data.json", import.meta.url);
+
+// ── Auth helpers ─────────────────────────────────────────────────────────────
+let adminToken = null;
+
+/**
+ * Log in as the seed admin and store the JWT.
+ * Falls back to registering the account if it doesn't exist yet.
+ */
+async function loginAsAdmin() {
+  // Try login first
+  let res = await fetch(`${API_URL}/auth/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email: SEED_ADMIN_EMAIL, password: SEED_ADMIN_PASSWORD }),
+  });
+
+  // Auto-register if account doesn't exist
+  if (res.status === 401) {
+    console.log('🔑 Seed admin not found — registering...');
+    res = await fetch(`${API_URL}/auth/register`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        username: 'seed_admin',
+        email: SEED_ADMIN_EMAIL,
+        password: SEED_ADMIN_PASSWORD,
+      }),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`Failed to register seed admin: ${res.status} ${text}`);
+    }
+    // Newly registered users have role='viewer'; upgrade must be done in DB.
+    // If the user already exists as admin in DB this won't run.
+    const regData = await res.json();
+    adminToken = regData.data?.token ?? null;
+    console.warn('⚠️  Seed admin registered as viewer — role must be set to admin/commentator in DB for events to post.');
+    return;
+  }
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Failed to login as seed admin: ${res.status} ${text}`);
+  }
+
+  const data = await res.json();
+  adminToken = data.data?.token ?? null;
+  const role = data.data?.user?.role ?? 'unknown';
+  console.log(`🔑 Logged in as seed admin (role: ${role})`);
+}
+
+// Structured event types that should also be posted to /matches/:id/events
+const STRUCTURED_EVENT_TYPES = new Set([
+  'goal', 'yellow_card', 'red_card', 'substitution',
+  'foul', 'penalty', 'corner', 'offside', 'injury',
+]);
+
+/**
+ * Post a structured match event to /matches/:id/events.
+ * Silently skips if no admin token is available or role insufficient.
+ */
+async function insertEvent(matchId, entry) {
+  if (!adminToken) return;
+  const payload = {
+    event_type: entry.eventType,
+    payload: {
+      player: entry.actor  ?? null,
+      team:   entry.team   ?? null,
+      ...(entry.metadata ?? {}),
+    },
+    minute: entry.minute ?? undefined,
+    period: entry.period ?? undefined,
+  };
+
+  const res = await fetch(`${API_URL}/matches/${matchId}/events`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'authorization': `Bearer ${adminToken}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.status);
+    console.warn(`⚠️  Event insert failed for match ${matchId} (${entry.eventType}): ${text}`);
+  } else {
+    console.log(`⚡ [Match ${matchId}] Event logged: ${entry.eventType}`);
+  }
+}
 
 async function readJsonFile(fileUrl) {
   const raw = await fs.readFile(fileUrl, "utf8");
@@ -182,65 +275,45 @@ async function insertCommentary(matchId, entry) {
   return responsePayload.data;
 }
 
-// NOTE: Score delta logic is commented out because this codebase
-// does not expose score update endpoints.
-// function extractRuns(entry) {
-//   if (Number.isFinite(entry.runs)) {
-//     return entry.runs;
-//   }
-//   if (entry.metadata && Number.isFinite(entry.metadata.runs)) {
-//     return entry.metadata.runs;
-//   }
-//   if (entry.eventType === "four") {
-//     return 4;
-//   }
-//   if (entry.eventType === "six") {
-//     return 6;
-//   }
-//   if (entry.eventType === "run") {
-//     return 1;
-//   }
-//   return null;
-// }
-//
-// function scoreDeltaFromEntry(entry, match) {
-//   if (entry.scoreDelta && typeof entry.scoreDelta === "object") {
-//     return {
-//       home: Number(entry.scoreDelta.home || 0),
-//       away: Number(entry.scoreDelta.away || 0),
-//     };
-//   }
-//
-//   if (entry.eventType === "goal") {
-//     if (entry.team === match.homeTeam) {
-//       return { home: 1, away: 0 };
-//     }
-//     if (entry.team === match.awayTeam) {
-//       return { home: 0, away: 1 };
-//     }
-//   }
-//
-//   const runs = extractRuns(entry);
-//   if (runs !== null) {
-//     if (entry.team === match.homeTeam) {
-//       return { home: runs, away: 0 };
-//     }
-//     if (entry.team === match.awayTeam) {
-//       return { home: 0, away: runs };
-//     }
-//   }
-//
-//   return null;
-// }
-//
-// function fakeScoreDelta(matchState) {
-//   const nextSide = matchState.fakeNext === "home" ? "away" : "home";
-//   matchState.fakeNext = nextSide;
-//   const points = 1;
-//   return nextSide === "home"
-//     ? { home: points, away: 0 }
-//     : { home: 0, away: points };
-// }
+function extractRuns(entry) {
+  if (Number.isFinite(entry.runs)) return entry.runs;
+  if (entry.metadata && Number.isFinite(entry.metadata.runs)) return entry.metadata.runs;
+  if (entry.eventType === "four") return 4;
+  if (entry.eventType === "six")  return 6;
+  if (entry.eventType === "run")  return 1;
+  return null;
+}
+
+function scoreDeltaFromEntry(entry, match) {
+  // Prefer explicit scoreDelta from data.json
+  if (entry.scoreDelta && typeof entry.scoreDelta === "object") {
+    return {
+      home: Number(entry.scoreDelta.home || 0),
+      away: Number(entry.scoreDelta.away || 0),
+    };
+  }
+  // Football / basketball: goal event → +1 for the scoring team
+  if (entry.eventType === "goal" || entry.eventType === "basket") {
+    if (entry.team === match.homeTeam) return { home: 1, away: 0 };
+    if (entry.team === match.awayTeam) return { home: 0, away: 1 };
+  }
+  // Cricket: runs from the batting team
+  const runs = extractRuns(entry);
+  if (runs !== null) {
+    if (entry.team === match.homeTeam) return { home: runs, away: 0 };
+    if (entry.team === match.awayTeam) return { home: 0, away: runs };
+  }
+  return null;
+}
+
+function fakeScoreDelta(matchState) {
+  const nextSide = matchState.fakeNext === "home" ? "away" : "home";
+  matchState.fakeNext = nextSide;
+  // Basketball: 2pts per basket; others: 1 point
+  const sport = matchState.match?.sport?.toLowerCase() ?? "";
+  const pts = sport === "basketball" ? 2 : 1;
+  return nextSide === "home" ? { home: pts, away: 0 } : { home: 0, away: pts };
+}
 
 function inningsRank(period) {
   if (!period) {
@@ -277,28 +350,20 @@ function cricketBattingTeam(entry, match) {
   return null;
 }
 
-// function cricketScoreDelta(entry, match) {
-//   const battingTeam = cricketBattingTeam(entry, match);
-//   let delta = scoreDeltaFromEntry(entry, match);
-//   if (!delta) {
-//     if (!battingTeam) {
-//       return null;
-//     }
-//     const points = 1;
-//     return battingTeam === match.homeTeam
-//       ? { home: points, away: 0 }
-//       : { home: 0, away: points };
-//   }
-//
-//   if (!battingTeam) {
-//     return delta;
-//   }
-//
-//   if (battingTeam === match.homeTeam) {
-//     return { home: delta.home, away: 0 };
-//   }
-//   return { home: 0, away: delta.away };
-// }
+function cricketScoreDelta(entry, match, target) {
+  const battingTeam = cricketBattingTeam(entry, match);
+  let delta = scoreDeltaFromEntry(entry, match);
+  if (!delta) {
+    if (!battingTeam) return null;
+    const points = 1;
+    return battingTeam === match.homeTeam
+      ? { home: points, away: 0 }
+      : { home: 0, away: points };
+  }
+  if (!battingTeam) return delta;
+  if (battingTeam === match.homeTeam) return { home: delta.home + delta.away, away: 0 };
+  return { home: 0, away: delta.home + delta.away };
+}
 
 function normalizeCricketFeed(entries, match) {
   const sorted = [...entries].sort((a, b) => {
@@ -496,17 +561,17 @@ function getMatchEntry(entry, matchMap) {
   return matchMap.get(entry.matchId) ?? null;
 }
 
-// NOTE: Score updates are not part of this codebase yet.
-// async function updateMatchScore(matchId, homeScore, awayScore) {
-//   const response = await fetch(`${API_URL}/matches/${matchId}/score`, {
-//     method: "PATCH",
-//     headers: { "content-type": "application/json" },
-//     body: JSON.stringify({ homeScore, awayScore }),
-//   });
-//   if (!response.ok) {
-//     throw new Error(`Failed to update score: ${response.status}`);
-//   }
-// }
+async function updateMatchScore(matchId, homeScore, awayScore) {
+  const response = await fetch(`${API_URL}/matches/${matchId}/score`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ homeScore, awayScore }),
+  });
+  if (!response.ok) {
+    const text = await response.text().catch(() => response.status);
+    console.warn(`Score update failed for match ${matchId}: ${text}`);
+  }
+}
 
 function randomMatchDelay() {
   const range = NEW_MATCH_DELAY_MAX_MS - NEW_MATCH_DELAY_MIN_MS;
@@ -526,6 +591,9 @@ function randomMatchDelay() {
 
 async function seed() {
   console.log(`📡 Seeding via API: ${API_URL}`);
+
+  // Obtain admin JWT so we can post to role-protected /events endpoint
+  await loginAsAdmin();
 
   const { feed, matches: seedMatches } = await loadSeedData();
   const matchesList = await fetchMatches();
@@ -618,19 +686,23 @@ async function seed() {
     const row = await insertCommentary(match.id, entry);
     console.log(`📣 [Match ${match.id}] ${row.message}`);
 
-    // NOTE: Score updates are intentionally disabled in this codebase.
-    // const isCricket = String(match.sport).toLowerCase() === "cricket";
-    // const delta = isCricket
-    //   ? cricketScoreDelta(entry, match, target)
-    //   : (scoreDeltaFromEntry(entry, match) ?? fakeScoreDelta(target));
-    // if (delta) {
-    //   target.score.home += delta.home;
-    //   target.score.away += delta.away;
-    //   await updateMatchScore(match.id, target.score.home, target.score.away);
-    //   console.log(
-    //     `📊 [Match ${match.id}] Score updated: ${target.score.home}-${target.score.away}`,
-    //   );
-    // }
+    // Also post as a structured match event (populates match_events + notifications)
+    if (entry.eventType && STRUCTURED_EVENT_TYPES.has(entry.eventType)) {
+      await insertEvent(match.id, entry);
+    }
+
+    const isCricket = String(match.sport).toLowerCase() === "cricket";
+    const delta = isCricket
+      ? cricketScoreDelta(entry, match, target)
+      : (scoreDeltaFromEntry(entry, match) ?? fakeScoreDelta(target));
+    if (delta && (delta.home > 0 || delta.away > 0)) {
+      target.score.home += delta.home;
+      target.score.away += delta.away;
+      await updateMatchScore(match.id, target.score.home, target.score.away);
+      console.log(
+        `📊 [Match ${match.id}] Score: ${target.score.home}-${target.score.away}`,
+      );
+    }
 
     // NOTE: Match status updates are intentionally disabled in this codebase.
     // if (Number.isInteger(entry.matchId)) {

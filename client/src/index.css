@@ -251,33 +251,137 @@ select.input {
   50%       { opacity: 0.4; transform: scale(0.7); }
 }
 
-/* ── Toast ── */
+/* ── Toast (simple feedback only — bottom-right corner, compact) ── */
 .toast-container {
   position: fixed;
-  bottom: 24px;
-  right: 24px;
+  bottom: 16px;
+  right: 16px;
   z-index: 9999;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
+  pointer-events: none;       /* never blocks click-through */
+  max-width: 300px;
 }
 
 .toast {
-  padding: 12px 18px;
-  border-radius: 10px;
-  font-size: 0.875rem;
+  padding: 9px 14px;
+  border-radius: 8px;
+  font-size: 0.8rem;
   font-weight: 500;
-  max-width: 340px;
-  animation: slideIn 0.3s ease;
+  animation: slideIn 0.25s ease;
   border: 1px solid;
+  pointer-events: all;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
 }
-.toast-success { background: rgba(0,229,160,0.1); color: var(--c-success); border-color: rgba(0,229,160,0.25); }
-.toast-error   { background: rgba(255,59,92,0.1);  color: var(--c-error);   border-color: rgba(255,59,92,0.25); }
-.toast-info    { background: rgba(124,156,255,0.1); color: var(--c-scheduled); border-color: rgba(124,156,255,0.25); }
+.toast-success { background: rgba(0,229,160,0.12); color: var(--c-success);   border-color: rgba(0,229,160,0.22); }
+.toast-error   { background: rgba(255,59,92,0.12);  color: var(--c-error);     border-color: rgba(255,59,92,0.22); }
+.toast-info    { background: rgba(124,156,255,0.12); color: var(--c-scheduled); border-color: rgba(124,156,255,0.22); }
 
 @keyframes slideIn {
-  from { opacity: 0; transform: translateX(20px); }
+  from { opacity: 0; transform: translateX(16px); }
   to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(20px) scale(0.97); }
+  to   { opacity: 1; transform: translateX(0)   scale(1); }
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+/* ── Live Activity Bar (inline, below navbar) ── */
+.activity-bar {
+  position: sticky;
+  top: 60px;           /* sits right below the 60px navbar */
+  z-index: 90;
+  background: rgba(10,12,16,0.92);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--c-border);
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 36px;
+  overflow: hidden;
+}
+
+.activity-bar-label {
+  font-size: 0.65rem;
+  font-weight: 800;
+  color: var(--c-accent);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.activity-bar-label::before {
+  content: '';
+  display: block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--c-accent);
+  box-shadow: 0 0 6px var(--c-accent);
+  animation: pulse-dot 1.2s ease-in-out infinite;
+}
+
+.activity-bar-feed {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  gap: 20px;
+  align-items: center;
+}
+
+.activity-bar-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+  font-size: 0.78rem;
+  color: var(--c-text2);
+  animation: slideIn 0.25s ease;
+  flex-shrink: 0;
+}
+
+.activity-bar-badge {
+  padding: 1px 7px;
+  border-radius: 5px;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: rgba(0,229,160,0.12);
+  color: var(--c-accent);
+  border: 1px solid rgba(0,229,160,0.2);
+  flex-shrink: 0;
+}
+
+.activity-bar-badge.event {
+  background: rgba(245,166,35,0.12);
+  color: var(--c-warning);
+  border-color: rgba(245,166,35,0.2);
+}
+
+.activity-bar-badge.goal {
+  background: rgba(255,59,92,0.12);
+  color: var(--c-live);
+  border-color: rgba(255,59,92,0.2);
+}
+
+.activity-bar-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
 }
 
 /* ── Spinner ── */

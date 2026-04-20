@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api';
 import { useAuth } from '../contexts/AuthContext';
+import { useWs } from '../contexts/WsContext';
 import { useToast } from '../contexts/ToastContext';
 import { sportEmoji, formatDateTime } from '../utils';
 import { StatusBadge } from '../components/StatusBadge';
@@ -9,6 +10,7 @@ export default function SubscriptionsPage({ onSelectMatch }) {
   const [subs, setSubs]     = useState([]);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
+  const { unsubscribe } = useWs();
   const toast = useToast();
 
   const load = () => {
@@ -24,6 +26,7 @@ export default function SubscriptionsPage({ onSelectMatch }) {
   const unsub = async (matchId) => {
     try {
       await api.subscriptions.unsubscribe(matchId);
+      unsubscribe(matchId); // drop in-memory WS room (REST alone does not notify WS layer)
       setSubs(prev => prev.filter(s => s.matchId !== matchId));
       toast.success('Unsubscribed');
     } catch (err) {

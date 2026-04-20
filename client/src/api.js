@@ -32,6 +32,7 @@ async function request(method, path, body) {
 
 const get  = (path)        => request('GET',    path);
 const post = (path, body)  => request('POST',   path, body);
+const put  = (path, body)  => request('PUT',    path, body);
 const del  = (path)        => request('DELETE', path);
 const patch = (path, body) => request('PATCH',  path, body);
 
@@ -42,12 +43,25 @@ export const api = {
     login:    (data)  => post('/auth/login', data),
     logout:   ()      => post('/auth/logout'),
     me:       ()      => get('/auth/me'),
+    updateMe: (data)  => put('/auth/me', data),
   },
 
   // ── MATCHES ──────────────────────────────────────────────────────────────
   matches: {
-    list:   (limit = 50) => get(`/matches?limit=${limit}`),
+    /** @param {number | { limit?: number, status?: string, sport?: string, search?: string }} limitOrParams */
+    list: (limitOrParams = 50) => {
+      const params = typeof limitOrParams === 'number' ? { limit: limitOrParams } : limitOrParams;
+      const q = new URLSearchParams();
+      if (params.limit != null) q.set('limit', String(params.limit));
+      if (params.status) q.set('status', params.status);
+      if (params.sport) q.set('sport', params.sport);
+      if (params.search) q.set('search', params.search);
+      const qs = q.toString();
+      return get(`/matches${qs ? `?${qs}` : ''}`);
+    },
+    get:    (id)         => get(`/matches/${id}`),
     create: (data)       => post('/matches', data),
+    updateStatus: (id, data) => patch(`/matches/${id}/status`, data),
   },
 
   // ── COMMENTARY ───────────────────────────────────────────────────────────

@@ -1,7 +1,21 @@
+import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
 
 export default function ProfilePage({ setPage }) {
-  const { user, logout } = useAuth();
+  const { user, logout, updateProfile } = useAuth();
+  const toast = useToast();
+  const [form, setForm] = useState({ username: '', email: '', avatarUrl: '' });
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    setForm({
+      username: user.username ?? '',
+      email: user.email ?? '',
+      avatarUrl: user.avatarUrl ?? '',
+    });
+  }, [user]);
 
   if (!user) {
     return (
@@ -23,20 +37,55 @@ export default function ProfilePage({ setPage }) {
     admin:       'Full access: create matches, post commentary, and manage all events.',
   };
 
+  const submit = async (e) => {
+    e.preventDefault();
+    const payload = {};
+    if (form.username !== user.username) payload.username = form.username;
+    if (form.email !== user.email) payload.email = form.email;
+    const nextAvatar = form.avatarUrl.trim();
+    const prevAvatar = user.avatarUrl ?? '';
+    if (nextAvatar !== prevAvatar) payload.avatarUrl = nextAvatar;
+
+    if (Object.keys(payload).length === 0) {
+      toast.info('No changes to save.');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await updateProfile(payload);
+      toast.success('Profile updated.');
+    } catch (err) {
+      toast.error(err.message || 'Update failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="page" style={{ maxWidth: 560 }}>
       <h1 style={{ marginBottom: 24 }}>My Profile</h1>
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
-          <div style={{
-            width: 64, height: 64, borderRadius: '50%',
-            background: 'linear-gradient(135deg, var(--c-accent), #0070f3)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '1.6rem', fontWeight: 800, color: '#000'
-          }}>
-            {user.username[0].toUpperCase()}
-          </div>
+          {user.avatarUrl ? (
+            <img
+              src={user.avatarUrl}
+              alt=""
+              width={64}
+              height={64}
+              style={{ borderRadius: '50%', objectFit: 'cover' }}
+            />
+          ) : (
+            <div style={{
+              width: 64, height: 64, borderRadius: '50%',
+              background: 'linear-gradient(135deg, var(--c-accent), #0070f3)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '1.6rem', fontWeight: 800, color: '#000',
+            }}>
+              {user.username[0].toUpperCase()}
+            </div>
+          )}
           <div>
             <div style={{ fontWeight: 800, fontSize: '1.2rem' }}>{user.username}</div>
             <div style={{ color: 'var(--c-text2)', fontSize: '0.9rem' }}>{user.email}</div>
@@ -48,7 +97,53 @@ export default function ProfilePage({ setPage }) {
 
         <div className="divider" />
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 16 }}>
+          <div className="form-group">
+            <label className="form-label" htmlFor="pf-username">Username</label>
+            <input
+              id="pf-username"
+              className="input"
+              value={form.username}
+              onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))}
+              minLength={3}
+              maxLength={50}
+              required
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label" htmlFor="pf-email">Email</label>
+            <input
+              id="pf-email"
+              className="input"
+              type="email"
+              value={form.email}
+              onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+              required
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label" htmlFor="pf-avatar">Avatar URL</label>
+            <input
+              id="pf-avatar"
+              className="input"
+              type="text"
+              inputMode="url"
+              placeholder="https://…"
+              value={form.avatarUrl}
+              onChange={(e) => setForm((f) => ({ ...f, avatarUrl: e.target.value }))}
+            />
+            <p style={{ fontSize: '0.75rem', color: 'var(--c-text3)', marginTop: 6 }}>
+              Clear the field and save to remove your avatar.
+            </p>
+          </div>
+          <button className="btn btn-primary" type="submit" disabled={saving}>
+            {saving ? <><span className="spinner spinner-sm" />&nbsp;Saving…</> : 'Save changes'}
+          </button>
+        </form>
+
+        <div className="divider" style={{ marginTop: 20 }} />
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 8 }}>
           <Row label="User ID" value={`#${user.id}`} />
           <Row label="Role" value={user.role} />
           <Row label="Permissions" value={roleDescriptions[user.role] ?? '—'} />

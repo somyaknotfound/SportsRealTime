@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from './contexts/AuthContext';
 import Navbar from './components/Navbar';
+import LiveActivityBar from './components/LiveActivityBar';
 import AuthPage from './pages/AuthPage';
 import MatchesPage from './pages/MatchesPage';
 import MatchDetail from './pages/MatchDetail';
@@ -39,6 +40,9 @@ export default function App() {
   return (
     <div className="app-layout">
       <Navbar page={page} setPage={(p) => { setMatch(null); setPage(p); }} />
+
+      {/* Inline live-update strip — sits right below navbar, never covers match grid */}
+      <LiveActivityBar />
 
       {page === 'matches' && (
         <MatchesPage onSelectMatch={handleSelectMatch} />

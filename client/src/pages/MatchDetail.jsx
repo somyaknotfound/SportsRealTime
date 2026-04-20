@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { api } from '../api';
 import { useAuth } from '../contexts/AuthContext';
 import { useWs } from '../contexts/WsContext';
@@ -6,25 +6,45 @@ import { useToast } from '../contexts/ToastContext';
 import { sportEmoji, formatDateTime, eventTypeColor } from '../utils';
 import { StatusBadge } from '../components/StatusBadge';
 
+function scoreLabel(sport) {
+  const s = sport?.toLowerCase() ?? '';
+  if (s === 'cricket')    return 'Runs';
+  if (s === 'basketball') return 'Pts';
+  if (s === 'tennis')     return 'Sets';
+  return 'Goals';
+}
+
 const EVENT_TYPES = ['goal', 'yellow_card', 'red_card', 'substitution', 'foul', 'penalty', 'corner', 'offside', 'injury', 'other'];
 
 export default function MatchDetail({ match: initialMatch, onBack }) {
-  const [match, setMatch]       = useState(initialMatch);
-  const [tab, setTab]           = useState('commentary');
+  const [match, setMatch]           = useState(initialMatch);
+  const [tab, setTab]               = useState('commentary');
   const [commentary, setCommentary] = useState([]);
-  const [events, setEvents]     = useState([]);
-  const [loadingC, setLoadingC] = useState(true);
-  const [loadingE, setLoadingE] = useState(true);
+  const [events, setEvents]         = useState([]);
+  const [loadingC, setLoadingC]     = useState(true);
+  const [loadingE, setLoadingE]     = useState(true);
   const [subscribed, setSubscribed] = useState(false);
   const [subLoading, setSubLoading] = useState(false);
-  const feedRef = useRef(null);
+  const [statusLoading, setStatusLoading] = useState(false);
 
   const { user } = useAuth();
-  const { subscribe, unsubscribe, onMatchMessage } = useWs();
+  const { subscribe, unsubscribe, onMatchMessage, subscribedMatchIds, liveScores } = useWs();
   const toast = useToast();
 
-  // Fetch commentary & events on mount
+  // Live score — prefer WS push, else fall back to fetched match data
+  const ls = liveScores[match.id];
+  const homeScore = ls?.homeScore ?? match.homeScore;
+  const awayScore = ls?.awayScore ?? match.awayScore;
+  const label = scoreLabel(match.sport);
+  const isEffectivelySubscribed = subscribed || subscribedMatchIds.has(match.id);
+
+  // Fetch commentary & events on mount; also refresh match data for latest score
   useEffect(() => {
+    // Refresh single match to get current score from DB
+    api.matches.get(match.id)
+      .then(r => { if (r?.data) setMatch(r.data); })
+      .catch(() => {});
+
     api.commentary.list(match.id)
       .then(r => setCommentary(r.data ?? []))
       .catch(() => toast.error('Failed to load commentary'))
@@ -40,44 +60,73 @@ export default function MatchDetail({ match: initialMatch, onBack }) {
     }
   }, [match.id, user]);
 
-  // Check subscription status
+  // Check DB subscription status on mount
   useEffect(() => {
     if (!user) return;
     api.subscriptions.list().then(r => {
-      setSubscribed(r.data?.some(s => s.matchId === match.id) ?? false);
+      const isSub = r.data?.some(s => s.matchId === match.id) ?? false;
+      setSubscribed(isSub);
     }).catch(() => {});
   }, [match.id, user]);
 
-  // WebSocket subscribe/dispatch
+  // Commentary / match_event pushes: server only adds this socket to matchSubscribers
+  // when the user is DB-subscribed (restore on connect) or after an explicit WS subscribe.
+  // Do NOT send subscribe() on mount — that would bypass the "subscribe in DB first" rule.
+
+  // Receive WS messages for this match (server adds this socket to the room when DB
+  // subscriptions are restored on connect, or after an explicit subscribe message)
   useEffect(() => {
-    if (!user) return;
-    subscribe(match.id);
     const unsub = onMatchMessage(match.id, (msg) => {
       if (msg.type === 'commentary') {
-        setCommentary(prev => [msg.data, ...prev]);
+        setCommentary(prev => {
+          // Deduplicate by id in case of re-delivery
+          if (prev.some(c => c.id === msg.data.id)) return prev;
+          return [msg.data, ...prev];
+        });
       }
       if (msg.type === 'match_event') {
-        setEvents(prev => [msg.data, ...prev]);
+        setEvents(prev => {
+          if (prev.some(e => e.id === msg.data.id)) return prev;
+          return [msg.data, ...prev];
+        });
+      }
+      if (msg.type === 'match_status' && msg.data?.id === match.id) {
+        setMatch(msg.data);
       }
     });
-    return () => {
-      unsubscribe(match.id);
-      unsub();
-    };
-  }, [match.id, user, subscribe, unsubscribe, onMatchMessage]);
+    return unsub;
+  }, [match.id, onMatchMessage]);
+
+  const handleStatusChange = async (status) => {
+    if (!user || status === match.status) return;
+    setStatusLoading(true);
+    try {
+      const { data } = await api.matches.updateStatus(match.id, { status });
+      setMatch(data);
+      toast.success(`Match status set to ${status}`);
+    } catch (err) {
+      toast.error(err.message || 'Failed to update status');
+    } finally {
+      setStatusLoading(false);
+    }
+  };
 
   const handleSubscribe = async () => {
     if (!user) { toast.info('Sign in to subscribe'); return; }
     setSubLoading(true);
     try {
-      if (subscribed) {
+      if (isEffectivelySubscribed) {
         await api.subscriptions.unsubscribe(match.id);
         setSubscribed(false);
-        toast.success('Unsubscribed');
+        // Always leave the in-memory WS room (covers DB-only restore subs too)
+        unsubscribe(match.id);
+        toast.success('Unsubscribed — you won\'t receive updates for this match.');
       } else {
         await api.subscriptions.subscribe(match.id);
         setSubscribed(true);
-        toast.success('Subscribed! You\'ll get real-time updates.');
+        // REST subscribe does not join WS rooms server-side; mirror MatchesPage behaviour
+        subscribe(match.id);
+        toast.success('Subscribed! Real-time commentary will stream below.');
       }
     } catch (err) {
       toast.error(err.message || 'Action failed');
@@ -103,21 +152,77 @@ export default function MatchDetail({ match: initialMatch, onBack }) {
           </span>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <StatusBadge status={match.status} />
-            <button
-              className={`btn btn-sm ${subscribed ? 'btn-secondary' : 'btn-primary'}`}
-              onClick={handleSubscribe}
-              disabled={subLoading}
-            >
-              {subLoading ? <span className="spinner spinner-sm" /> : (subscribed ? '🔔 Subscribed' : '🔔 Subscribe')}
-            </button>
+            {user && (
+              <button
+                className={`btn btn-sm ${isEffectivelySubscribed ? 'btn-secondary' : 'btn-primary'}`}
+                onClick={handleSubscribe}
+                disabled={subLoading}
+              >
+                {subLoading
+                  ? <span className="spinner spinner-sm" />
+                  : isEffectivelySubscribed
+                    ? '🔔 Subscribed — click to unsubscribe'
+                    : '🔕 Subscribe for live updates'
+                }
+              </button>
+            )}
           </div>
         </div>
+
+        {/* Subscription hint for non-subscribed users */}
+        {user && !isEffectivelySubscribed && (
+          <div style={{
+            background: 'rgba(var(--c-accent-rgb, 52 211 153) / 0.08)',
+            border: '1px solid rgba(52,211,153,0.18)',
+            borderRadius: 8,
+            padding: '8px 14px',
+            fontSize: '0.8rem',
+            color: 'var(--c-text2)',
+            marginBottom: 14,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+          }}>
+            <span>🔕</span>
+            <span>Subscribe to receive real-time commentary and notifications for this match.</span>
+          </div>
+        )}
+
+        {canComment && (
+          <div style={{
+            marginBottom: 14,
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            gap: 8,
+            padding: '10px 12px',
+            background: 'rgba(124,156,255,0.06)',
+            borderRadius: 8,
+            border: '1px solid rgba(124,156,255,0.12)',
+          }}>
+            <span style={{ fontSize: '0.75rem', color: 'var(--c-text3)', fontWeight: 600 }}>Match status</span>
+            {['scheduled', 'live', 'finished'].map((s) => (
+              <button
+                key={s}
+                type="button"
+                className={`btn btn-sm ${match.status === s ? 'btn-primary' : 'btn-secondary'}`}
+                disabled={statusLoading || match.status === s}
+                onClick={() => handleStatusChange(s)}
+              >
+                {s}
+              </button>
+            ))}
+            {statusLoading && <span className="spinner spinner-sm" />}
+          </div>
+        )}
 
         <div className="match-scoreboard">
           <div className="team-block">
             <div className="name">{match.homeTeam}</div>
-            <div className="scoreboard-score">{match.homeScore}</div>
-            <div style={{ fontSize: '0.8rem', color: 'var(--c-text3)', marginTop: 4 }}>Home</div>
+            <div className="scoreboard-score" style={{ color: ls ? 'var(--c-accent)' : undefined }}>
+              {homeScore}
+            </div>
+            <div style={{ fontSize: '0.8rem', color: 'var(--c-text3)', marginTop: 4 }}>{label} · Home</div>
           </div>
 
           <div className="vs-divider">
@@ -127,8 +232,10 @@ export default function MatchDetail({ match: initialMatch, onBack }) {
 
           <div className="team-block">
             <div className="name">{match.awayTeam}</div>
-            <div className="scoreboard-score">{match.awayScore}</div>
-            <div style={{ fontSize: '0.8rem', color: 'var(--c-text3)', marginTop: 4 }}>Away</div>
+            <div className="scoreboard-score" style={{ color: ls ? 'var(--c-accent)' : undefined }}>
+              {awayScore}
+            </div>
+            <div style={{ fontSize: '0.8rem', color: 'var(--c-text3)', marginTop: 4 }}>{label} · Away</div>
           </div>
         </div>
       </div>
@@ -139,6 +246,9 @@ export default function MatchDetail({ match: initialMatch, onBack }) {
           <div className="tab-bar">
             <button className={`tab ${tab === 'commentary' ? 'active' : ''}`} onClick={() => setTab('commentary')}>
               💬 Commentary
+              {isEffectivelySubscribed && (
+                <span style={{ marginLeft: 6, width: 7, height: 7, borderRadius: '50%', background: '#22c55e', display: 'inline-block', animation: 'pulse 1.5s infinite' }} />
+              )}
             </button>
             {user && (
               <button className={`tab ${tab === 'events' ? 'active' : ''}`} onClick={() => setTab('events')}>
@@ -153,6 +263,7 @@ export default function MatchDetail({ match: initialMatch, onBack }) {
               commentary={commentary}
               loading={loadingC}
               canComment={canComment}
+              isSubscribed={isEffectivelySubscribed}
               onAdded={(c) => setCommentary(prev => [c, ...prev])}
             />
           )}
@@ -168,7 +279,7 @@ export default function MatchDetail({ match: initialMatch, onBack }) {
           )}
         </div>
 
-        {/* Sidebar: post commentary form (always visible for commentators) */}
+        {/* Sidebar: post commentary form (commentators/admins only) */}
         {canComment && tab === 'commentary' && (
           <CommentaryForm matchId={match.id} onAdded={(c) => setCommentary(prev => [c, ...prev])} />
         )}
@@ -178,13 +289,16 @@ export default function MatchDetail({ match: initialMatch, onBack }) {
 }
 
 /* ─── Commentary Tab ─────────────────────────────────────────── */
-function CommentaryTab({ matchId, commentary, loading, canComment, onAdded }) {
+function CommentaryTab({ matchId, commentary, loading, canComment, isSubscribed, onAdded }) {
   if (loading) return <div style={{ display:'flex', justifyContent:'center', padding:40 }}><div className="spinner"/></div>;
   if (!commentary.length) return (
-    <div className="empty-state"><span className="icon">💬</span><p>No commentary yet. Be the first!</p></div>
+    <div className="empty-state">
+      <span className="icon">💬</span>
+      <p>{isSubscribed ? 'No commentary yet — updates will stream here in real-time.' : 'No commentary yet. Subscribe to see live updates.'}</p>
+    </div>
   );
   return (
-    <div className="commentary-feed" ref={null}>
+    <div className="commentary-feed">
       {commentary.map((c, i) => (
         <div key={c.id} className={`commentary-item ${i === 0 ? 'realtime' : ''}`}>
           <span className="commentary-minute">{c.minute != null ? `${c.minute}'` : '—'}</span>
@@ -214,11 +328,11 @@ function CommentaryForm({ matchId, onAdded }) {
     setLoading(true);
     try {
       const payload = { message: form.message };
-      if (form.minute) payload.minute = Number(form.minute);
-      if (form.period) payload.period = form.period;
+      if (form.minute)    payload.minute    = Number(form.minute);
+      if (form.period)    payload.period    = form.period;
       if (form.eventType) payload.eventType = form.eventType;
-      if (form.actor) payload.actor = form.actor;
-      if (form.team) payload.team = form.team;
+      if (form.actor)     payload.actor     = form.actor;
+      if (form.team)      payload.team      = form.team;
 
       const res = await api.commentary.create(matchId, payload);
       onAdded(res.data);
@@ -281,9 +395,7 @@ function CommentaryForm({ matchId, onAdded }) {
 /* ─── Events Tab ─────────────────────────────────────────────── */
 function EventsTab({ matchId, events, loading, canCreate, onAdded }) {
   const [showForm, setShowForm] = useState(false);
-
   if (loading) return <div style={{ display:'flex', justifyContent:'center', padding:40 }}><div className="spinner"/></div>;
-
   return (
     <div>
       {canCreate && (
@@ -294,9 +406,7 @@ function EventsTab({ matchId, events, loading, canCreate, onAdded }) {
           </button>
         </div>
       )}
-
       {canCreate && showForm && <EventForm matchId={matchId} onAdded={(ev) => { onAdded(ev); setShowForm(false); }} />}
-
       {!events.length ? (
         <div className="empty-state"><span className="icon">⚡</span><p>No events logged yet.</p></div>
       ) : (
@@ -323,9 +433,7 @@ function EventItem({ event, isNew }) {
         )}
       </div>
       <div style={{ flex: 1 }}>
-        <div className="event-payload">
-          {JSON.stringify(event.payload, null, 2)}
-        </div>
+        <div className="event-payload">{JSON.stringify(event.payload, null, 2)}</div>
         <div style={{ fontSize: '0.75rem', color: 'var(--c-text3)', marginTop: 6, display: 'flex', gap: 8 }}>
           {event.period && <span>{event.period}</span>}
           {event.createdBy?.username && <span>by @{event.createdBy.username}</span>}
@@ -354,7 +462,7 @@ function EventForm({ matchId, onAdded }) {
         event_type: form.event_type,
         payload,
         minute: form.minute ? Number(form.minute) : undefined,
-        period: form.period || undefined,
+        period:  form.period || undefined,
       });
       onAdded(res.data);
       toast.success('Event logged!');
@@ -380,12 +488,10 @@ function EventForm({ matchId, onAdded }) {
             <input className="input" type="number" min={0} placeholder="45" value={form.minute} onChange={set('minute')} />
           </div>
         </div>
-
         <div className="form-group">
           <label className="form-label">Period</label>
           <input className="input" placeholder="1st half / 2nd innings…" value={form.period} onChange={set('period')} />
         </div>
-
         <div className="form-group">
           <label className="form-label">Payload (JSON) *</label>
           <textarea
@@ -397,7 +503,6 @@ function EventForm({ matchId, onAdded }) {
             required
           />
         </div>
-
         <button className="btn btn-primary" type="submit" disabled={loading}>
           {loading ? <><span className="spinner spinner-sm" />&nbsp;Logging…</> : 'Log Event'}
         </button>

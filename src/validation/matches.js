@@ -8,6 +8,13 @@ export const MATCH_STATUS = {
 
 export const listMatchesQuerySchema = z.object({
   limit: z.coerce.number().int().positive().max(100).optional(),
+  status: z.enum(['scheduled', 'live', 'finished']).optional(),
+  sport: z.string().min(1).max(120).optional(),
+  search: z.string().min(1).max(200).optional(),
+});
+
+export const patchMatchStatusSchema = z.object({
+  status: z.enum(['scheduled', 'live', 'finished']),
 });
 
 export const matchIdParamSchema = z.object({

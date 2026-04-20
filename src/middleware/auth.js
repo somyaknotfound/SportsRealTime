@@ -60,6 +60,8 @@ export async function authenticate(req, res, next) {
         role:      users.role,
         avatarUrl: users.avatarUrl,
         isActive:  users.isActive,
+        createdAt: users.createdAt,
+        updatedAt: users.updatedAt,
       })
       .from(users)
       .where(eq(users.id, session.userId))

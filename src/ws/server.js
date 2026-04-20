@@ -288,5 +288,10 @@ export function attachWebSocketServer(server) {
     broadcastToMatch(matchId, { type: 'match_event', data: event });
   }
 
-  return { broadcastMatchCreated, broadcastCommentary, broadcastMatchEvent };
+  /** Full match row after status change — all clients can refresh listing/detail badges */
+  function broadcastMatchStatus(match) {
+    broadcastToAll(wss, { type: 'match_status', data: match });
+  }
+
+  return { broadcastMatchCreated, broadcastCommentary, broadcastMatchEvent, broadcastMatchStatus };
 }

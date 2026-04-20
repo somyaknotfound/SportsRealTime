@@ -1,29 +1,35 @@
 import 'dotenv/config';
 import { defineConfig } from 'drizzle-kit';
 
-const required = ['DB_HOST', 'DB_PORT', 'DB_USER', 'DB_PASSWORD', 'DB_NAME'];
-const missing = required.filter((k) => !process.env[k]);
+/**
+ * Drizzle Kit reads credentials only from process.env (via .env).
+ * No fallbacks for DB_USER or DB_PASSWORD — unset vars fail fast.
+ * Empty string for DB_PASSWORD is allowed when explicitly set in .env (DB_PASSWORD=).
+ */
+const REQUIRED = ['DB_HOST', 'DB_PORT', 'DB_USER', 'DB_PASSWORD', 'DB_NAME'];
+
+const missing = REQUIRED.filter((key) => process.env[key] === undefined);
 if (missing.length > 0) {
   throw new Error(
-    `Missing required environment variables for Drizzle: ${missing.join(', ')}`
+    `drizzle-kit: missing required environment variables: ${missing.join(', ')}. ` +
+      'Set them in .env (no implicit root/empty defaults).'
   );
 }
 
-const host = process.env.DB_HOST;
 const port = Number(process.env.DB_PORT);
-const user = process.env.DB_USER;
-const password = process.env.DB_PASSWORD;
-const database = process.env.DB_NAME;
+if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+  throw new Error(`drizzle-kit: DB_PORT must be an integer between 1 and 65535, got "${process.env.DB_PORT}"`);
+}
 
 export default defineConfig({
   schema: './src/db/schema.js',
   out: './drizzle',
   dialect: 'mysql',
   dbCredentials: {
-    host: host,
-    port: port,
-    user: user,
-    password: password,
-    database: database,
+    host: process.env.DB_HOST,
+    port,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME,
   },
 });

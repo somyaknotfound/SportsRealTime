@@ -10,3 +10,16 @@ export const loginSchema = z.object({
   email:    z.string().email('Must be a valid email address.'),
   password: z.string().min(1, 'Password is required.'),
 });
+
+/** Partial profile update — at least one field required */
+export const updateProfileSchema = z
+  .object({
+    username: z.string().min(3).max(50).optional(),
+    email: z.string().email().max(255).optional(),
+    /** Empty string clears the avatar URL in the DB */
+    avatarUrl: z.string().max(500).optional(),
+  })
+  .strict()
+  .refine((d) => d.username !== undefined || d.email !== undefined || d.avatarUrl !== undefined, {
+    message: 'Provide at least one of username, email, avatarUrl',
+  });

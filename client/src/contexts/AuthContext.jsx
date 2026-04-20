@@ -21,6 +21,7 @@ export function AuthProvider({ children }) {
   const login = useCallback(async (email, password) => {
     const res = await api.auth.login({ email, password });
     localStorage.setItem('srt_token', res.data.token);
+    window.dispatchEvent(new Event('srt_token_changed'));
     setUser(res.data.user);
     return res.data.user;
   }, []);
@@ -28,6 +29,7 @@ export function AuthProvider({ children }) {
   const register = useCallback(async (username, email, password) => {
     const res = await api.auth.register({ username, email, password });
     localStorage.setItem('srt_token', res.data.token);
+    window.dispatchEvent(new Event('srt_token_changed'));
     setUser(res.data.user);
     return res.data.user;
   }, []);
@@ -35,11 +37,18 @@ export function AuthProvider({ children }) {
   const logout = useCallback(async () => {
     try { await api.auth.logout(); } catch {}
     localStorage.removeItem('srt_token');
+    window.dispatchEvent(new Event('srt_token_changed'));
     setUser(null);
   }, []);
 
+  const updateProfile = useCallback(async (payload) => {
+    const res = await api.auth.updateMe(payload);
+    setUser(res.data.user);
+    return res.data.user;
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, updateProfile }}>
       {children}
     </AuthContext.Provider>
   );

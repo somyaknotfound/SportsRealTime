@@ -4,8 +4,8 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { db } from '../db/db.js';
 import { users, userSessions } from '../db/schema.js';
-import { eq, and, gt } from 'drizzle-orm';
-import { registerSchema, loginSchema } from '../validation/auth.js';
+import { eq, and, gt, ne } from 'drizzle-orm';
+import { registerSchema, loginSchema, updateProfileSchema } from '../validation/auth.js';
 import { authenticate, hashToken } from '../middleware/auth.js';
 
 export const authRouter = Router();
@@ -131,4 +131,74 @@ authRouter.post('/logout', authenticate, async (req, res) => {
 authRouter.get('/me', authenticate, (req, res) => {
   // req.user is already stripped of passwordHash by the middleware
   return res.status(200).json({ data: { user: req.user } });
+});
+
+// ── PUT /auth/me ─────────────────────────────────────────────────────────────
+authRouter.put('/me', authenticate, async (req, res) => {
+  const parsed = updateProfileSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'Validation failed.', details: parsed.error.issues });
+  }
+
+  const { username, email, avatarUrl } = parsed.data;
+
+  try {
+    if (username !== undefined) {
+      const [taken] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(and(eq(users.username, username), ne(users.id, req.user.id)))
+        .limit(1);
+      if (taken) {
+        return res.status(409).json({ error: 'Username is already taken.' });
+      }
+    }
+
+    if (email !== undefined) {
+      const [taken] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(and(eq(users.email, email), ne(users.id, req.user.id)))
+        .limit(1);
+      if (taken) {
+        return res.status(409).json({ error: 'Email is already registered.' });
+      }
+    }
+
+    const updates = {};
+    if (username !== undefined) updates.username = username;
+    if (email !== undefined) updates.email = email;
+    if (avatarUrl !== undefined) {
+      updates.avatarUrl = avatarUrl === '' ? null : avatarUrl;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: 'No updates provided.' });
+    }
+
+    await db.update(users).set(updates).where(eq(users.id, req.user.id));
+
+    const [user] = await db
+      .select({
+        id: users.id,
+        username: users.username,
+        email: users.email,
+        role: users.role,
+        avatarUrl: users.avatarUrl,
+        isActive: users.isActive,
+        createdAt: users.createdAt,
+        updatedAt: users.updatedAt,
+      })
+      .from(users)
+      .where(eq(users.id, req.user.id))
+      .limit(1);
+
+    return res.status(200).json({ data: { user } });
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ error: 'Username or email already taken.' });
+    }
+    console.error('Profile update error:', err);
+    return res.status(500).json({ error: 'Failed to update profile.' });
+  }
 });

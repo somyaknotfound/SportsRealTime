@@ -49,12 +49,13 @@ app.get('/', (_req, res) => res.json({ message: 'Server is running' }));
 // app.use(securityMiddleware());
 
 // ── WebSocket server (must init before routes use broadcast functions) ────────
-const { broadcastMatchCreated, broadcastCommentary, broadcastMatchEvent } =
+const { broadcastMatchCreated, broadcastCommentary, broadcastMatchEvent, broadcastMatchStatus } =
   attachWebSocketServer(server);
 
 app.locals.broadcastMatchCreated = broadcastMatchCreated;
 app.locals.broadcastCommentary   = broadcastCommentary;
 app.locals.broadcastMatchEvent   = broadcastMatchEvent;
+app.locals.broadcastMatchStatus  = broadcastMatchStatus;
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 
